@@ -1,0 +1,72 @@
+
+name: Extrair MD Ambiental Pro
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extrair:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar repositorio
+        uses: actions/checkout@v4
+
+      - name: Extrair codigo-fonte
+        run: |
+          python3 - <<'PY'
+          import os
+          import shutil
+          import zipfile
+          from pathlib import Path
+
+          arquivo = Path("md-ambiental-pro-starter-v0.1(1).zip")
+          destino = Path("/tmp/md-ambiental-extract")
+          prefixo = "md-ambiental-pro-starter/"
+
+          if not arquivo.is_file():
+              raise FileNotFoundError(str(arquivo))
+
+          with zipfile.ZipFile(arquivo) as zip_ref:
+              for item in zip_ref.infolist():
+                  caminho = item.filename
+                  partes = Path(caminho).parts
+                  if (not caminho.startswith(prefixo)
+                      or ".." in partes
+                      or item.is_dir() is False
+                      and ((item.external_attr >> 16) & 0o170000)
+                      == 0o120000):
+                      raise ValueError("Entrada invalida: " + caminho)
+              zip_ref.extractall(destino)
+
+          origem = destino / "md-ambiental-pro-starter"
+
+          for item in origem.iterdir():
+              alvo = Path.cwd() / item.name
+              if item.is_dir():
+                  shutil.copytree(item, alvo, dirs_exist_ok=True)
+              else:
+                  shutil.copy2(item, alvo)
+
+          print("Extracao concluida.")
+          PY
+
+      - name: Publicar arquivos extraidos
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add app lib package.json
+          git add README.md postcss.config.mjs
+          git add tsconfig.json next-env.d.ts
+          git add .gitignore .env.example
+
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteracao encontrada."
+          else
+            git commit -m "Adicionar codigo-fonte MD Ambiental Pro"
+            git push
+          fi
